@@ -18,6 +18,7 @@ import PySide6.QtGui as QtGui
 
 # Substance Painter imports
 import _substance_painter.project
+import _substance_painter.textureset
 import substance_painter.event
 import substance_painter.export
 import substance_painter.logging
@@ -30,6 +31,22 @@ import substance_painter.js
 # Plugin settings
 PLUGIN_NAME = "Export on Save"
 SETTINGS_FILE = "export_on_save_settings.json"
+
+class _ActionUnlock():
+	"""Action to unlock the project
+	About Unlock and Lock: Substance Painter will lock the project file during all the saving progress,
+	which will block the access to the texture set,
+	the only workaround is to unlock the project.
+	Ref: https://community.adobe.com/t5/substance-3d-painter-discussions/python-scripting-writing-project-metadata-when-saving-the-project/td-p/13114944
+	"""
+	def __enter__(self):
+		_substance_painter.project.do_action(_substance_painter.project.Action.Unlock)
+		return self
+	
+	def __exit__(self, err_type, err_value, traceback):
+		_substance_painter.project.do_action(_substance_painter.project.Action.Lock)
+
+
 
 class ExportOnSaveMenu(QtWidgets.QMenu):
 	"""Main plugin menu control"""
@@ -112,13 +129,71 @@ class ExportOnSaveMenu(QtWidgets.QMenu):
 		substance_painter.logging.info(f"[{PLUGIN_NAME}] Manual export test completed")
 
 
+	def execute_export(self):
+		"""Execute export operation"""
+		try:
+			# Make build config
+			export_config = self.build_export_config()
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] Build config: {json.dumps(export_config, indent=2, ensure_ascii=False)}")
+
+			self.status_action.setText("Status: Exporting...")
+			
+			# Record texture sets to be exported
+			texture_set_names = [item["rootPath"] for item in export_config["exportList"]]
+			substance_painter.logging.info(
+				f"[{PLUGIN_NAME}] Preparing to export texture sets: {', '.join(texture_set_names)}"
+			)
+			
+			# Execute export
+			result = substance_painter.export.export_project_textures(export_config)
+
+			if result.status == substance_painter.export.ExportStatus.Success:
+				# Count exported files
+				file_count = sum(len(files) for files in result.textures.values())
+
+				self.status_action.setText(f"Status: Export successful ({file_count} files)")
+
+				substance_painter.logging.info(
+					f"[{PLUGIN_NAME}] Successfully exported {file_count} texture files to {export_config['exportPath']}"
+				)
+
+				# Detailed record of exported files
+				for (texture_set, stack), files in result.textures.items():
+					substance_painter.logging.info(
+						f"[{PLUGIN_NAME}] Texture set '{texture_set}' -> {', '.join(files)}"
+					)
+
+			elif result.status == substance_painter.export.ExportStatus.Warning:
+				self.status_action.setText("Status: Export completed with warnings")
+				substance_painter.logging.warning(
+					f"[{PLUGIN_NAME}] {result.message}"
+				)
+
+			elif result.status == substance_painter.export.ExportStatus.Cancelled:
+				self.status_action.setText("Status: Export cancelled")
+				substance_painter.logging.info(
+					f"[{PLUGIN_NAME}] Export cancelled by user"
+				)
+
+			else:
+				self.status_action.setText(f"Status: Export failed")
+				substance_painter.logging.error(
+					f"[{PLUGIN_NAME}] Export failed: {result.message}"
+				)
+				
+		except Exception as e:
+			self.status_action.setText(f"Status: Export exception - {str(e)}")
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Exception occurred during export: {str(e)}")
+
 	def build_export_config(self):
 		try:
 			# Get currently active texture set
 			try:
 				active_stack = substance_painter.textureset.get_active_stack()
 				active_texture_set = active_stack.material()
-				active_texture_set_name = active_texture_set.name()
+				# TextureSet.name() will call deprecated method `_utility.make_callable()`, so we hack it
+				# active_texture_set_name = active_texture_set.name()
+				active_texture_set_name = _substance_painter.textureset.material_name(active_texture_set.material_id)
 
 				if not active_texture_set_name:
 					substance_painter.logging.warning(f"[{PLUGIN_NAME}] Currently active texture set has no name")
@@ -173,63 +248,6 @@ class ExportOnSaveMenu(QtWidgets.QMenu):
 			return
 		return export_config
 	
-
-
-	def execute_export(self):
-		"""Execute export operation"""
-		try:
-			# Make build config
-			export_config = self.build_export_config()
-
-			self.status_action.setText("Status: Exporting...")
-			
-			# Record texture sets to be exported
-			texture_set_names = [item["rootPath"] for item in export_config["exportList"]]
-			substance_painter.logging.info(
-				f"[{PLUGIN_NAME}] Preparing to export texture sets: {', '.join(texture_set_names)}"
-			)
-			
-			# Execute export
-			result = substance_painter.export.export_project_textures(export_config)
-
-			if result.status == substance_painter.export.ExportStatus.Success:
-				# Count exported files
-				file_count = sum(len(files) for files in result.textures.values())
-
-				self.status_action.setText(f"Status: Export successful ({file_count} files)")
-
-				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] Successfully exported {file_count} texture files to {export_config['exportPath']}"
-				)
-
-				# Detailed record of exported files
-				for (texture_set, stack), files in result.textures.items():
-					substance_painter.logging.info(
-						f"[{PLUGIN_NAME}] Texture set '{texture_set}' -> {', '.join(files)}"
-					)
-
-			elif result.status == substance_painter.export.ExportStatus.Warning:
-				self.status_action.setText("Status: Export completed with warnings")
-				substance_painter.logging.warning(
-					f"[{PLUGIN_NAME}] {result.message}"
-				)
-
-			elif result.status == substance_painter.export.ExportStatus.Cancelled:
-				self.status_action.setText("Status: Export cancelled")
-				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] Export cancelled by user"
-				)
-
-			else:
-				self.status_action.setText(f"Status: Export failed")
-				substance_painter.logging.error(
-					f"[{PLUGIN_NAME}] Export failed: {result.message}"
-				)
-				
-		except Exception as e:
-			self.status_action.setText(f"Status: Export exception - {str(e)}")
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] Exception occurred during export: {str(e)}")
-	
 	def load_settings(self):
 		"""Load settings"""
 		try:
@@ -269,25 +287,12 @@ class ExportOnSaveMenu(QtWidgets.QMenu):
 # Global variables
 export_menu = None
 
-class _ActionUnlock():
-
-	def __enter__(self):
-		_substance_painter.project.do_action(_substance_painter.project.Action.Unlock)
-		return self
-	
-	def __exit__(self, err_type, err_value, traceback):
-		_substance_painter.project.do_action(_substance_painter.project.Action.Lock)
-
 def on_project_saved(event):
 	"""Project saved event handler"""
 	global export_menu
 
 	if export_menu and export_menu.enabled:
 		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export started on project saved")
-		# About Unlock and Lock: sp will lock the project file during all the saving progress,
-		#   which will block the access to the texture set,
-		#   the only workaround is to unlock the project.
-		# Ref: https://community.adobe.com/t5/substance-3d-painter-discussions/python-scripting-writing-project-metadata-when-saving-the-project/td-p/13114944
 		with _ActionUnlock():
 			export_menu.execute_export()
 		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export completed")
