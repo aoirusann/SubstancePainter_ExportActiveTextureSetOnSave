@@ -17,6 +17,7 @@ import PySide6.QtCore as QtCore
 import PySide6.QtGui as QtGui
 
 # Substance Painter imports
+import _substance_painter.project
 import substance_painter.event
 import substance_painter.export
 import substance_painter.logging
@@ -30,112 +31,70 @@ import substance_painter.js
 PLUGIN_NAME = "Export on Save"
 SETTINGS_FILE = "export_on_save_settings.json"
 
-class ExportOnSaveWidget(QtWidgets.QWidget):
-	"""Main plugin control panel"""
-	
+class ExportOnSaveMenu(QtWidgets.QMenu):
+	"""Main plugin menu control"""
+
 	def __init__(self):
-		super().__init__()
-		self.setObjectName("ExportOnSaveWidget")
-		self.setWindowTitle(PLUGIN_NAME)
-		self.setWindowIcon(QtGui.QIcon())
-		
+		super().__init__(PLUGIN_NAME)
+		self.setObjectName("ExportOnSaveMenu")
+
 		# Settings variables
 		self.enabled = False
-		
+
 		self.load_settings()
-		self.init_ui()
-	
-	def init_ui(self):
-		"""Initialize user interface"""
-		layout = QtWidgets.QVBoxLayout()
-		layout.setSpacing(10)
-		
-		# Title
-		title_label = QtWidgets.QLabel(PLUGIN_NAME)
-		title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		layout.addWidget(title_label)
-		
-		# Enable/Disable toggle
-		self.enable_checkbox = QtWidgets.QCheckBox("Enable Auto Export on Save")
-		self.enable_checkbox.setChecked(self.enabled)
-		self.enable_checkbox.stateChanged.connect(self.on_enabled_changed)
-		layout.addWidget(self.enable_checkbox)
-		
+		self.init_menu()
 
-		
-		# Status display
-		self.status_label = QtWidgets.QLabel("Status: Ready")
-		self.status_label.setStyleSheet("color: green;")
-		layout.addWidget(self.status_label)
-		
-		# Control button row
-		button_row = QtWidgets.QHBoxLayout()
-		
-		# Test button (for debugging)
-		test_button = QtWidgets.QPushButton("Manual Export Test")
-		test_button.clicked.connect(self.manual_export_test)
-		button_row.addWidget(test_button)
-		
+	def init_menu(self):
+		"""Initialize menu structure"""
 
-		
-		# Debug info button
-		debug_button = QtWidgets.QPushButton("Show Debug Info")
-		debug_button.clicked.connect(self.show_debug_info)
-		debug_button.setToolTip("Show debug information for currently active texture set")
-		button_row.addWidget(debug_button)
-		
-		layout.addLayout(button_row)
-		
-		# Help text
-		help_text = QtWidgets.QLabel(
-			"Note: When enabled, the currently active texture set will be automatically exported using the current project's export configuration each time the project is saved. "
-			"Export results will be displayed in the log."
-		)
-		help_text.setWordWrap(True)
-		help_text.setStyleSheet("color: gray; font-size: 11px;")
-		layout.addWidget(help_text)
-		
-		layout.addStretch()
-		self.setLayout(layout)
+		# Enable/Disable toggle action
+		self.enable_action = QtGui.QAction("Enable Auto Export on Save")
+		self.enable_action.setCheckable(True)
+		self.enable_action.setChecked(self.enabled)
+		self.enable_action.triggered.connect(self.on_enabled_changed)
+		self.addAction(self.enable_action)
+
+		self.addSeparator()
+
+		# Manual Export Test action
+		self.test_action = QtGui.QAction("Manual Export Test")
+		self.test_action.triggered.connect(self.manual_export_test)
+		self.addAction(self.test_action)
+
+		# Debug info action
+		self.debug_action = QtGui.QAction("Show Debug Info")
+		self.debug_action.setToolTip("Show debug information for currently active texture set")
+		self.debug_action.triggered.connect(self.show_debug_info)
+		self.addAction(self.debug_action)
+
+		self.addSeparator()
+
+		# Status display (as a disabled action to show status)
+		self.status_action = QtGui.QAction("Status: Ready")
+		self.status_action.setEnabled(False)
+		self.addAction(self.status_action)
 	
 
-	def on_enabled_changed(self, state):
+	def on_enabled_changed(self, checked):
 		"""Callback when enabled state changes"""
-		print(f"===={type(state)}: {state}====")
-
-		self.enabled = (QtCore.Qt.CheckState(state) == QtCore.Qt.CheckState.Checked)
+		self.enabled = checked
 		self.save_settings()
-		
+
 		status = "Enabled" if self.enabled else "Disabled"
-		self.status_label.setText(f"Status: Auto Export {status}")
-		self.status_label.setStyleSheet("color: green;" if self.enabled else "color: gray;")
-		
+		self.status_action.setText(f"Status: Auto Export {status}")
+
 		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export feature {status.lower()}")
 
 
-
-
-	
 	def show_debug_info(self):
 		"""Show debug information"""
 		try:
 			substance_painter.logging.info(f"[{PLUGIN_NAME}] === Debug Info ===")
 			substance_painter.logging.info(f"[{PLUGIN_NAME}] Enabled state: {self.enabled}")
 
-			# Show currently active texture set information
-			try:
-				active_stack = substance_painter.textureset.get_active_stack()
-				active_texture_set = active_stack.material()
-				active_texture_set_name = active_texture_set.name()
-
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] Currently active texture set: '{active_texture_set_name}'")
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] Currently active stack: '{active_stack.name()}'")
-
-			except Exception as e:
-				substance_painter.logging.warning(f"[{PLUGIN_NAME}] Failed to get currently active texture set: {str(e)}")
-
-			self.status_label.setText("Status: Debug info output to log")
-			self.status_label.setStyleSheet("color: green;")
+			# Show currently build config
+			export_config = self.build_export_config()
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] Build config: {json.dumps(export_config, indent=2, ensure_ascii=False)}")
 
 			substance_painter.logging.info(f"[{PLUGIN_NAME}] === Debug Info End ===")
 
@@ -144,32 +103,17 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 	
 	def manual_export_test(self):
 		"""Manual export test"""
-		try:
-			# Add debug info
-			active_stack = substance_painter.textureset.get_active_stack()
-			active_texture_set = active_stack.material()
-			active_texture_set_name = active_texture_set.name()
-
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] Debug info:")
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] - Currently active texture set: '{active_texture_set_name}'")
-
-		except Exception as e:
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] Failed to get currently active texture set: {str(e)}")
-			self.status_label.setText(f"Status: Failed to get current texture set - {str(e)}")
-			self.status_label.setStyleSheet("color: red;")
-			return
-
 		if not substance_painter.project.is_open():
-			self.status_label.setText("Status: No project open")
-			self.status_label.setStyleSheet("color: red;")
+			self.status_action.setText("Status: No project open")
 			return
 
-		self.execute_export("Manual Export Test")
-	
-	def execute_export(self, trigger_source="Auto Export"):
-		"""Execute export operation"""
-		try:
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Manual export test started")
+		self.execute_export()
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Manual export test completed")
 
+
+	def build_export_config(self):
+		try:
 			# Get currently active texture set
 			try:
 				active_stack = substance_painter.textureset.get_active_stack()
@@ -177,20 +121,16 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 				active_texture_set_name = active_texture_set.name()
 
 				if not active_texture_set_name:
-					substance_painter.logging.warning(f"[{PLUGIN_NAME}] {trigger_source}: Currently active texture set has no name")
-					self.status_label.setText("Status: Current texture set has no name")
-					self.status_label.setStyleSheet("color: orange;")
+					substance_painter.logging.warning(f"[{PLUGIN_NAME}] Currently active texture set has no name")
+					self.status_action.setText("Status: Current texture set has no name")
 					return
 
 				# Build export list, only including currently active texture set
 				export_list = [{"rootPath": active_texture_set_name}]
 
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] {trigger_source}: Will export currently active texture set '{active_texture_set_name}'")
-
 			except Exception as e:
 				substance_painter.logging.error(f"[{PLUGIN_NAME}] Error getting currently active texture set: {str(e)}")
-				self.status_label.setText("Status: Failed to get current texture set")
-				self.status_label.setStyleSheet("color: red;")
+				self.status_action.setText("Status: Failed to get current texture set")
 				return
 
 			# Get current export path
@@ -228,15 +168,26 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 					}
 				}]
 			}
+		except Exception as e:
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Failed to build export config: {str(e)}")
+			return
+		return export_config
+	
+
+
+	def execute_export(self):
+		"""Execute export operation"""
+		try:
+			# Make build config
+			export_config = self.build_export_config()
+
+			self.status_action.setText("Status: Exporting...")
 			
 			# Record texture sets to be exported
-			texture_set_names = [item["rootPath"] for item in export_list]
+			texture_set_names = [item["rootPath"] for item in export_config["exportList"]]
 			substance_painter.logging.info(
-				f"[{PLUGIN_NAME}] {trigger_source}: Preparing to export texture sets: {', '.join(texture_set_names)}"
+				f"[{PLUGIN_NAME}] Preparing to export texture sets: {', '.join(texture_set_names)}"
 			)
-			
-			self.status_label.setText("Status: Exporting...")
-			self.status_label.setStyleSheet("color: orange;")
 			
 			# Execute export
 			result = substance_painter.export.export_project_textures(export_config)
@@ -244,45 +195,40 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 			if result.status == substance_painter.export.ExportStatus.Success:
 				# Count exported files
 				file_count = sum(len(files) for files in result.textures.values())
-				
-				self.status_label.setText(f"Status: Export successful ({file_count} files)")
-				self.status_label.setStyleSheet("color: green;")
-				
+
+				self.status_action.setText(f"Status: Export successful ({file_count} files)")
+
 				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] {trigger_source} completed: Successfully exported {file_count} texture files to {export_path}"
+					f"[{PLUGIN_NAME}] Successfully exported {file_count} texture files to {export_config['exportPath']}"
 				)
-				
+
 				# Detailed record of exported files
 				for (texture_set, stack), files in result.textures.items():
 					substance_painter.logging.info(
-						f"[{PLUGIN_NAME}] Texture set '{texture_set}' -> {len(files)} files"
+						f"[{PLUGIN_NAME}] Texture set '{texture_set}' -> {', '.join(files)}"
 					)
-				
+
 			elif result.status == substance_painter.export.ExportStatus.Warning:
-				self.status_label.setText("Status: Export completed with warnings")
-				self.status_label.setStyleSheet("color: orange;")
+				self.status_action.setText("Status: Export completed with warnings")
 				substance_painter.logging.warning(
-					f"[{PLUGIN_NAME}] {trigger_source} completed with warnings: {result.message}"
+					f"[{PLUGIN_NAME}] {result.message}"
 				)
-				
+
 			elif result.status == substance_painter.export.ExportStatus.Cancelled:
-				self.status_label.setText("Status: Export cancelled")
-				self.status_label.setStyleSheet("color: orange;")
+				self.status_action.setText("Status: Export cancelled")
 				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] {trigger_source} cancelled by user"
+					f"[{PLUGIN_NAME}] Export cancelled by user"
 				)
-			
+
 			else:
-				self.status_label.setText(f"Status: Export failed")
-				self.status_label.setStyleSheet("color: red;")
+				self.status_action.setText(f"Status: Export failed")
 				substance_painter.logging.error(
-					f"[{PLUGIN_NAME}] {trigger_source} failed: {result.message}"
+					f"[{PLUGIN_NAME}] Export failed: {result.message}"
 				)
 				
 		except Exception as e:
-			self.status_label.setText(f"Status: Export exception - {str(e)}")
-			self.status_label.setStyleSheet("color: red;")
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] Exception occurred during {trigger_source}: {str(e)}")
+			self.status_action.setText(f"Status: Export exception - {str(e)}")
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Exception occurred during export: {str(e)}")
 	
 	def load_settings(self):
 		"""Load settings"""
@@ -321,32 +267,41 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 
 
 # Global variables
-export_widget = None
-dock_widget = None
+export_menu = None
+
+class _ActionUnlock():
+
+	def __enter__(self):
+		_substance_painter.project.do_action(_substance_painter.project.Action.Unlock)
+		return self
+	
+	def __exit__(self, err_type, err_value, traceback):
+		_substance_painter.project.do_action(_substance_painter.project.Action.Lock)
 
 def on_project_saved(event):
 	"""Project saved event handler"""
-	global export_widget
-	
-	if export_widget and export_widget.enabled:
-		substance_painter.logging.info(f"[{PLUGIN_NAME}] Project save detected, starting auto export...")
+	global export_menu
+
+	if export_menu and export_menu.enabled:
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export started on project saved")
 		# About Unlock and Lock: sp will lock the project file during all the saving progress,
 		#   which will block the access to the texture set,
 		#   the only workaround is to unlock the project.
 		# Ref: https://community.adobe.com/t5/substance-3d-painter-discussions/python-scripting-writing-project-metadata-when-saving-the-project/td-p/13114944
-		with substance_painter.project._ActionLock():
-			export_widget.execute_export("Auto Export After Save")
+		with _ActionUnlock():
+			export_menu.execute_export()
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export completed")
 
 def start_plugin():
 	"""Start plugin"""
-	global export_widget, dock_widget
-	
+	global export_menu
+
 	try:
-		# Create plugin UI
-		export_widget = ExportOnSaveWidget()
-		
-		# Add UI as dock widget
-		dock_widget = substance_painter.ui.add_dock_widget(export_widget)
+		# Create plugin menu
+		export_menu = ExportOnSaveMenu()
+
+		# Add menu to application
+		substance_painter.ui.add_menu(export_menu)
 		
 		# Register project saved event listener
 		substance_painter.event.DISPATCHER.connect(
@@ -361,24 +316,21 @@ def start_plugin():
 
 def close_plugin():
 	"""Close plugin"""
-	global export_widget, dock_widget
-	
+	global export_menu
+
 	try:
 		# Disconnect event listener
 		substance_painter.event.DISPATCHER.disconnect(
 			substance_painter.event.ProjectSaved,
 			on_project_saved
 		)
-		
-		# Clean up UI
-		if dock_widget:
-			substance_painter.ui.delete_ui_element(dock_widget)
-			dock_widget = None
-		
-		if export_widget:
-			export_widget = None
-		
+
+		# Clean up menu
+		if export_menu:
+			substance_painter.ui.delete_ui_element(export_menu)
+			export_menu = None
+
 		substance_painter.logging.info(f"[{PLUGIN_NAME}] Plugin closed")
-		
+
 	except Exception as e:
 		substance_painter.logging.error(f"[{PLUGIN_NAME}] Error occurred while closing plugin: {str(e)}")
