@@ -1,5 +1,7 @@
 # Substance painter python plugin: ExportActiveTextureSetOnSave
 
+![](./pic/showcase.gif)
+
 This is a substance painter python plugin for automatically exporting active texture when .spp file is saved.
 
 Built for Substance Painter v11.0.1. The plugin has not been tested for other version yet.
