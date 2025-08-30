@@ -17,7 +17,6 @@ import PySide6.QtCore as QtCore
 import PySide6.QtGui as QtGui
 
 # Substance Painter imports
-import _substance_painter.project as _sp_p
 import substance_painter.event
 import substance_painter.export
 import substance_painter.logging
@@ -32,7 +31,7 @@ PLUGIN_NAME = "Export on Save"
 SETTINGS_FILE = "export_on_save_settings.json"
 
 class ExportOnSaveWidget(QtWidgets.QWidget):
-	"""主插件控制面板"""
+	"""Main plugin control panel"""
 	
 	def __init__(self):
 		super().__init__()
@@ -40,57 +39,57 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 		self.setWindowTitle(PLUGIN_NAME)
 		self.setWindowIcon(QtGui.QIcon())
 		
-		# 设置变量
+		# Settings variables
 		self.enabled = False
 		
 		self.load_settings()
 		self.init_ui()
 	
 	def init_ui(self):
-		"""初始化用户界面"""
+		"""Initialize user interface"""
 		layout = QtWidgets.QVBoxLayout()
 		layout.setSpacing(10)
 		
-		# 标题
+		# Title
 		title_label = QtWidgets.QLabel(PLUGIN_NAME)
 		title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
 		layout.addWidget(title_label)
 		
-		# 启用/禁用开关
-		self.enable_checkbox = QtWidgets.QCheckBox("启用保存时自动导出")
+		# Enable/Disable toggle
+		self.enable_checkbox = QtWidgets.QCheckBox("Enable Auto Export on Save")
 		self.enable_checkbox.setChecked(self.enabled)
 		self.enable_checkbox.stateChanged.connect(self.on_enabled_changed)
 		layout.addWidget(self.enable_checkbox)
 		
 
 		
-		# 状态显示
-		self.status_label = QtWidgets.QLabel("状态: 就绪")
+		# Status display
+		self.status_label = QtWidgets.QLabel("Status: Ready")
 		self.status_label.setStyleSheet("color: green;")
 		layout.addWidget(self.status_label)
 		
-		# 控制按钮行
+		# Control button row
 		button_row = QtWidgets.QHBoxLayout()
 		
-		# 测试按钮（用于调试）
-		test_button = QtWidgets.QPushButton("手动导出测试")
+		# Test button (for debugging)
+		test_button = QtWidgets.QPushButton("Manual Export Test")
 		test_button.clicked.connect(self.manual_export_test)
 		button_row.addWidget(test_button)
 		
 
 		
-		# 调试信息按钮
-		debug_button = QtWidgets.QPushButton("显示调试信息")
+		# Debug info button
+		debug_button = QtWidgets.QPushButton("Show Debug Info")
 		debug_button.clicked.connect(self.show_debug_info)
-		debug_button.setToolTip("显示当前激活纹理集的调试信息")
+		debug_button.setToolTip("Show debug information for currently active texture set")
 		button_row.addWidget(debug_button)
 		
 		layout.addLayout(button_row)
 		
-		# 说明文本
+		# Help text
 		help_text = QtWidgets.QLabel(
-			"说明：启用后，每次保存项目时将自动使用当前项目的导出配置导出当前激活的纹理集。"
-			"导出结果会显示在日志中。"
+			"Note: When enabled, the currently active texture set will be automatically exported using the current project's export configuration each time the project is saved. "
+			"Export results will be displayed in the log."
 		)
 		help_text.setWordWrap(True)
 		help_text.setStyleSheet("color: gray; font-size: 11px;")
@@ -101,104 +100,103 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 	
 
 	def on_enabled_changed(self, state):
-		"""启用状态改变时的回调"""
+		"""Callback when enabled state changes"""
 		print(f"===={type(state)}: {state}====")
 
 		self.enabled = (QtCore.Qt.CheckState(state) == QtCore.Qt.CheckState.Checked)
 		self.save_settings()
 		
-		status = "启用" if self.enabled else "禁用"
-		self.status_label.setText(f"状态: 自动导出已{status}")
+		status = "Enabled" if self.enabled else "Disabled"
+		self.status_label.setText(f"Status: Auto Export {status}")
 		self.status_label.setStyleSheet("color: green;" if self.enabled else "color: gray;")
 		
-		substance_painter.logging.info(f"[{PLUGIN_NAME}] 自动导出功能已{status}")
-	
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Auto export feature {status.lower()}")
 
 
 
 
 	
 	def show_debug_info(self):
-		"""显示调试信息"""
+		"""Show debug information"""
 		try:
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] === 调试信息 ===")
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] 启用状态: {self.enabled}")
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] === Debug Info ===")
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] Enabled state: {self.enabled}")
 
-			# 显示当前激活的纹理集信息
+			# Show currently active texture set information
 			try:
 				active_stack = substance_painter.textureset.get_active_stack()
 				active_texture_set = active_stack.material()
 				active_texture_set_name = active_texture_set.name()
 
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] 当前激活的纹理集: '{active_texture_set_name}'")
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] 当前激活的栈: '{active_stack.name()}'")
+				substance_painter.logging.info(f"[{PLUGIN_NAME}] Currently active texture set: '{active_texture_set_name}'")
+				substance_painter.logging.info(f"[{PLUGIN_NAME}] Currently active stack: '{active_stack.name()}'")
 
 			except Exception as e:
-				substance_painter.logging.warning(f"[{PLUGIN_NAME}] 获取当前激活纹理集失败: {str(e)}")
+				substance_painter.logging.warning(f"[{PLUGIN_NAME}] Failed to get currently active texture set: {str(e)}")
 
-			self.status_label.setText("状态: 调试信息已输出到日志")
+			self.status_label.setText("Status: Debug info output to log")
 			self.status_label.setStyleSheet("color: green;")
 
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] === 调试信息结束 ===")
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] === Debug Info End ===")
 
 		except Exception as e:
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] 显示调试信息失败: {str(e)}")
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Failed to show debug info: {str(e)}")
 	
 	def manual_export_test(self):
-		"""手动导出测试"""
+		"""Manual export test"""
 		try:
-			# 添加调试信息
+			# Add debug info
 			active_stack = substance_painter.textureset.get_active_stack()
 			active_texture_set = active_stack.material()
 			active_texture_set_name = active_texture_set.name()
 
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] 调试信息：")
-			substance_painter.logging.info(f"[{PLUGIN_NAME}] - 当前激活的纹理集: '{active_texture_set_name}'")
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] Debug info:")
+			substance_painter.logging.info(f"[{PLUGIN_NAME}] - Currently active texture set: '{active_texture_set_name}'")
 
 		except Exception as e:
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] 获取当前激活纹理集失败: {str(e)}")
-			self.status_label.setText(f"状态: 获取当前纹理集失败 - {str(e)}")
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Failed to get currently active texture set: {str(e)}")
+			self.status_label.setText(f"Status: Failed to get current texture set - {str(e)}")
 			self.status_label.setStyleSheet("color: red;")
 			return
 
 		if not substance_painter.project.is_open():
-			self.status_label.setText("状态: 没有打开的项目")
+			self.status_label.setText("Status: No project open")
 			self.status_label.setStyleSheet("color: red;")
 			return
 
-		self.execute_export("手动导出测试")
+		self.execute_export("Manual Export Test")
 	
-	def execute_export(self, trigger_source="自动导出"):
-		"""执行导出操作"""
+	def execute_export(self, trigger_source="Auto Export"):
+		"""Execute export operation"""
 		try:
 
-			# 获取当前激活的纹理集
+			# Get currently active texture set
 			try:
 				active_stack = substance_painter.textureset.get_active_stack()
 				active_texture_set = active_stack.material()
 				active_texture_set_name = active_texture_set.name()
 
 				if not active_texture_set_name:
-					substance_painter.logging.warning(f"[{PLUGIN_NAME}] {trigger_source}: 当前激活的纹理集没有名称")
-					self.status_label.setText("状态: 当前纹理集无名称")
+					substance_painter.logging.warning(f"[{PLUGIN_NAME}] {trigger_source}: Currently active texture set has no name")
+					self.status_label.setText("Status: Current texture set has no name")
 					self.status_label.setStyleSheet("color: orange;")
 					return
 
-				# 构建导出列表，只包含当前激活的纹理集
+				# Build export list, only including currently active texture set
 				export_list = [{"rootPath": active_texture_set_name}]
 
-				substance_painter.logging.info(f"[{PLUGIN_NAME}] {trigger_source}: 将导出当前激活的纹理集 '{active_texture_set_name}'")
+				substance_painter.logging.info(f"[{PLUGIN_NAME}] {trigger_source}: Will export currently active texture set '{active_texture_set_name}'")
 
 			except Exception as e:
-				substance_painter.logging.error(f"[{PLUGIN_NAME}] 获取当前激活纹理集时出错: {str(e)}")
-				self.status_label.setText("状态: 获取当前纹理集失败")
+				substance_painter.logging.error(f"[{PLUGIN_NAME}] Error getting currently active texture set: {str(e)}")
+				self.status_label.setText("Status: Failed to get current texture set")
 				self.status_label.setStyleSheet("color: red;")
 				return
 
-			# 获取当前导出路径
+			# Get current export path
 			export_path = substance_painter.js.evaluate("alg.mapexport.exportPath()")
 
-			# 获取当前导出设定
+			# Get current export settings
 			export_fileFormat = substance_painter.js.evaluate("alg.mapexport.getProjectExportOptions().fileFormat")
 			export_padding = substance_painter.js.evaluate("alg.mapexport.getProjectExportOptions().padding").lower()
 			export_dilation = substance_painter.js.evaluate("alg.mapexport.getProjectExportOptions().dilation")
@@ -211,10 +209,10 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 				export_dithering = True
 
 
-			# 获取当前导出预设
+			# Get current export preset
 			export_preset = substance_painter.js.evaluate("alg.mapexport.getProjectExportPreset()")
 			
-			# 构建导出配置
+			# Build export configuration
 			export_config = {
 				"exportShaderParams": export_exportShaderParams,
 				"defaultExportPreset": export_preset,
@@ -231,63 +229,63 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 				}]
 			}
 			
-			# 记录将要导出的纹理集
+			# Record texture sets to be exported
 			texture_set_names = [item["rootPath"] for item in export_list]
 			substance_painter.logging.info(
-				f"[{PLUGIN_NAME}] {trigger_source}: 准备导出纹理集: {', '.join(texture_set_names)}"
+				f"[{PLUGIN_NAME}] {trigger_source}: Preparing to export texture sets: {', '.join(texture_set_names)}"
 			)
 			
-			self.status_label.setText("状态: 正在导出...")
+			self.status_label.setText("Status: Exporting...")
 			self.status_label.setStyleSheet("color: orange;")
 			
-			# 执行导出
+			# Execute export
 			result = substance_painter.export.export_project_textures(export_config)
 
 			if result.status == substance_painter.export.ExportStatus.Success:
-				# 统计导出的文件数量
+				# Count exported files
 				file_count = sum(len(files) for files in result.textures.values())
 				
-				self.status_label.setText(f"状态: 导出成功 ({file_count} 个文件)")
+				self.status_label.setText(f"Status: Export successful ({file_count} files)")
 				self.status_label.setStyleSheet("color: green;")
 				
 				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] {trigger_source}完成: 成功导出 {file_count} 个贴图文件到 {export_path}"
+					f"[{PLUGIN_NAME}] {trigger_source} completed: Successfully exported {file_count} texture files to {export_path}"
 				)
 				
-				# 详细记录导出的文件
+				# Detailed record of exported files
 				for (texture_set, stack), files in result.textures.items():
 					substance_painter.logging.info(
-						f"[{PLUGIN_NAME}] 贴图集 '{texture_set}' -> {len(files)} 个文件"
+						f"[{PLUGIN_NAME}] Texture set '{texture_set}' -> {len(files)} files"
 					)
 				
 			elif result.status == substance_painter.export.ExportStatus.Warning:
-				self.status_label.setText("状态: 导出完成但有警告")
+				self.status_label.setText("Status: Export completed with warnings")
 				self.status_label.setStyleSheet("color: orange;")
 				substance_painter.logging.warning(
-					f"[{PLUGIN_NAME}] {trigger_source}完成但有警告: {result.message}"
+					f"[{PLUGIN_NAME}] {trigger_source} completed with warnings: {result.message}"
 				)
 				
 			elif result.status == substance_painter.export.ExportStatus.Cancelled:
-				self.status_label.setText("状态: 导出被取消")
+				self.status_label.setText("Status: Export cancelled")
 				self.status_label.setStyleSheet("color: orange;")
 				substance_painter.logging.info(
-					f"[{PLUGIN_NAME}] {trigger_source}被用户取消"
+					f"[{PLUGIN_NAME}] {trigger_source} cancelled by user"
 				)
 			
 			else:
-				self.status_label.setText(f"状态: 导出失败")
+				self.status_label.setText(f"Status: Export failed")
 				self.status_label.setStyleSheet("color: red;")
 				substance_painter.logging.error(
-					f"[{PLUGIN_NAME}] {trigger_source}失败: {result.message}"
+					f"[{PLUGIN_NAME}] {trigger_source} failed: {result.message}"
 				)
 				
 		except Exception as e:
-			self.status_label.setText(f"状态: 导出异常 - {str(e)}")
+			self.status_label.setText(f"Status: Export exception - {str(e)}")
 			self.status_label.setStyleSheet("color: red;")
-			substance_painter.logging.error(f"[{PLUGIN_NAME}] {trigger_source}时发生异常: {str(e)}")
+			substance_painter.logging.error(f"[{PLUGIN_NAME}] Exception occurred during {trigger_source}: {str(e)}")
 	
 	def load_settings(self):
-		"""加载设置"""
+		"""Load settings"""
 		try:
 			settings_path = os.path.join(
 				os.path.dirname(__file__),
@@ -301,10 +299,10 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 				self.enabled = settings.get('enabled', False)
 
 		except Exception as e:
-			substance_painter.logging.warning(f"[{PLUGIN_NAME}] 加载设置失败: {str(e)}")
+			substance_painter.logging.warning(f"[{PLUGIN_NAME}] Failed to load settings: {str(e)}")
 	
 	def save_settings(self):
-		"""保存设置"""
+		"""Save settings"""
 		try:
 			settings = {
 				'enabled': self.enabled
@@ -319,61 +317,60 @@ class ExportOnSaveWidget(QtWidgets.QWidget):
 				json.dump(settings, f, indent=2, ensure_ascii=False)
 
 		except Exception as e:
-			substance_painter.logging.warning(f"[{PLUGIN_NAME}] 保存设置失败: {str(e)}")
+			substance_painter.logging.warning(f"[{PLUGIN_NAME}] Failed to save settings: {str(e)}")
 
 
-# 全局变量
+# Global variables
 export_widget = None
 dock_widget = None
 
 def on_project_saved(event):
-	"""项目保存事件处理器"""
+	"""Project saved event handler"""
 	global export_widget
 	
 	if export_widget and export_widget.enabled:
-		substance_painter.logging.info(f"[{PLUGIN_NAME}] 检测到项目保存，开始自动导出...")
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Project save detected, starting auto export...")
 		# About Unlock and Lock: sp will lock the project file during all the saving progress,
 		#   which will block the access to the texture set,
 		#   the only workaround is to unlock the project.
 		# Ref: https://community.adobe.com/t5/substance-3d-painter-discussions/python-scripting-writing-project-metadata-when-saving-the-project/td-p/13114944
-		_sp_p.do_action(_sp_p.Action.Unlock)
-		export_widget.execute_export("保存后自动导出")
-		_sp_p.do_action(_sp_p.Action.Lock)
+		with substance_painter.project._ActionLock():
+			export_widget.execute_export("Auto Export After Save")
 
 def start_plugin():
-	"""启动插件"""
+	"""Start plugin"""
 	global export_widget, dock_widget
 	
 	try:
-		# 创建插件UI
+		# Create plugin UI
 		export_widget = ExportOnSaveWidget()
 		
-		# 将UI添加为停靠窗口
+		# Add UI as dock widget
 		dock_widget = substance_painter.ui.add_dock_widget(export_widget)
 		
-		# 注册项目保存事件监听器
+		# Register project saved event listener
 		substance_painter.event.DISPATCHER.connect(
 			substance_painter.event.ProjectSaved,
 			on_project_saved
 		)
 		
-		substance_painter.logging.info(f"[{PLUGIN_NAME}] 插件启动成功")
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Plugin started successfully")
 		
 	except Exception as e:
-		substance_painter.logging.error(f"[{PLUGIN_NAME}] 插件启动失败: {str(e)}")
+		substance_painter.logging.error(f"[{PLUGIN_NAME}] Plugin startup failed: {str(e)}")
 
 def close_plugin():
-	"""关闭插件"""
+	"""Close plugin"""
 	global export_widget, dock_widget
 	
 	try:
-		# 断开事件监听器
+		# Disconnect event listener
 		substance_painter.event.DISPATCHER.disconnect(
 			substance_painter.event.ProjectSaved,
 			on_project_saved
 		)
 		
-		# 清理UI
+		# Clean up UI
 		if dock_widget:
 			substance_painter.ui.delete_ui_element(dock_widget)
 			dock_widget = None
@@ -381,11 +378,7 @@ def close_plugin():
 		if export_widget:
 			export_widget = None
 		
-		substance_painter.logging.info(f"[{PLUGIN_NAME}] 插件已关闭")
+		substance_painter.logging.info(f"[{PLUGIN_NAME}] Plugin closed")
 		
 	except Exception as e:
-		substance_painter.logging.error(f"[{PLUGIN_NAME}] 关闭插件时发生错误: {str(e)}")
-
-# 插件入口点
-if __name__ == "__plugin__":
-	start_plugin()
+		substance_painter.logging.error(f"[{PLUGIN_NAME}] Error occurred while closing plugin: {str(e)}")
