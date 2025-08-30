@@ -11,6 +11,8 @@ Built for Substance Painter v11.0.1. The plugin has not been tested for other ve
 2. Open the subfolder `plugins`:
 ![](pic/2025-08-30-19-39-28.png)
 3. Download the file `export_on_save.py` in this repository into the folder `plugins`:
+![](pic/2025-08-30-20-10-19.png)
+![](pic/2025-08-30-20-10-47.png)
 ![](pic/2025-08-30-19-40-35.png)
 4. In substance painter application, click `Python - Reload Plugins Folder`
 ![](pic/2025-08-30-19-41-34.png)
